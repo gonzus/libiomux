@@ -145,10 +145,10 @@ static void set_error(iomux_t *iomux, char *fmt, ...) {
 static void
 iomux_timeout_destroy(iomux_timeout_t *timeout)
 {
+    // Gonzo: check if timeout is null?
     if (timeout->free_ctx_cb)
         timeout->free_ctx_cb(timeout->priv);
     free(timeout);
-    
 }
 
 iomux_t *
@@ -206,7 +206,7 @@ iomux_create(int bufsize, int threadsafe)
     iomux->last_timeout_id = 0;
 
     // NOTE : we save this file descriptor to mitigate accept() EMFILE errors
-    //        (which might be leading to inifinite loops)
+    //        (which might be leading to infinite loops)
     //        Basically we keep a spare file descriptor that we close to get
     //        below the EMFILE limit to then accept() and immediately close()
     //        all pending connections
@@ -269,6 +269,7 @@ iomux_add(iomux_t *iomux, int fd, iomux_callbacks_t *cbs)
         connection->kfilters[0] = EVFILT_READ;
         connection->kfilters[1] = EVFILT_WRITE;
 
+        // Gonzo: how to do error checking here?
         EV_SET(&connection->event[0], fd, connection->kfilters[0], EV_ADD | EV_ONESHOT, 0, 0, 0);
         EV_SET(&connection->event[1], fd, connection->kfilters[1], EV_DELETE | EV_ONESHOT, 0, 0, 0);
 #endif
@@ -294,7 +295,7 @@ iomux_add(iomux_t *iomux, int fd, iomux_callbacks_t *cbs)
         // if we have no emfile_fd saved, let's open one now
         // it could have been previously closed because we
         // reached the EMFILE condition but we were not able
-        // to open it again because some other thread go the
+        // to open it again because some other thread got the
         // free filedescriptor before us being able to get it back
         if (iomux->emfile_fd == -1)
             iomux->emfile_fd = open("/", O_CLOEXEC);
@@ -373,8 +374,6 @@ iomux_schedule(iomux_t *iomux,
                void *priv,
                iomux_timeout_free_context_cb free_ctx_cb)
 {
-    iomux_timeout_t *timeout;
-
     if (!tv || !cb)
         return 0;
 
@@ -385,7 +384,7 @@ iomux_schedule(iomux_t *iomux,
     if (iomux->last_timeout_check.tv_sec == 0)
         memcpy(&iomux->last_timeout_check, &now, sizeof(struct timeval));
 
-    timeout = (iomux_timeout_t *)calloc(1, sizeof(iomux_timeout_t));
+    iomux_timeout_t *timeout = (iomux_timeout_t *)calloc(1, sizeof(iomux_timeout_t));
     timeradd(&now, tv, &timeout->expire_time);
     timeout->cb = cb;
     timeout->priv = priv;
@@ -560,7 +559,8 @@ iomux_accept_connections_fd(iomux_t *iomux,
             mux_connection(iomux, newfd, priv);
     }
     if (errno == EMFILE || errno == ENFILE) {
-        fprintf(stderr, "Maximum number of filedescriptors reached, can't accept new connections!\n");
+        fprintf(stderr, "Maximum number of %s filedescriptors reached, can't accept new connections!\n",
+                errno == EMFILE ? "process" : "system");
         MUTEX_LOCK(iomux);
         if (iomux->emfile_fd >= 0) {
             close(iomux->emfile_fd);
@@ -627,6 +627,7 @@ iomux_write_fd(iomux_t *iomux, int fd, void *priv)
     iomux_output_chunk_t *chunk = TAILQ_FIRST(&iomux->connections[fd]->output_queue);
     if (!iomux->connections[fd] || !chunk) {
 #if defined(HAVE_EPOLL)
+            // Gonzo: should this unlock be AFTER changing the epoll structure?
             MUTEX_UNLOCK(iomux);
             // let's unregister this fd from EPOLLOUT events (seems nothing needs to be sent anymore)
             struct epoll_event event;
@@ -640,8 +641,8 @@ iomux_write_fd(iomux_t *iomux, int fd, void *priv)
                         fd, iomux->efd, strerror(errno));
             }
 #elif defined(HAVE_KQUEUE)
-        EV_SET(&iomux->connections[fd]->event[1], fd, iomux->connections[fd]->kfilters[1], EV_DELETE | EV_ONESHOT, 0, 0, 0);
-        MUTEX_UNLOCK(iomux);
+            EV_SET(&iomux->connections[fd]->event[1], fd, iomux->connections[fd]->kfilters[1], EV_DELETE | EV_ONESHOT, 0, 0, 0);
+            MUTEX_UNLOCK(iomux);
 #endif
         return;
     }
@@ -805,6 +806,7 @@ iomux_write(iomux_t *iomux, int fd, unsigned char *buf, int len, int mode)
 
     MUTEX_LOCK(iomux);
 
+    // Gonzo: could be do this check before the eventual allocation of chunk above?
     if (!iomux->connections[fd]) {
         MUTEX_UNLOCK(iomux);
         if (chunk->free) {
@@ -934,6 +936,7 @@ int iomux_write_buffer(iomux_t *iomux, int fd)
 void
 iomux_destroy(iomux_t *iomux)
 {
+    // Gonzo: should we acquire the mutex for the first part of this function?
     iomux_clear(iomux);
 #if defined(HAVE_EPOLL)
     close(iomux->efd);
@@ -1084,7 +1087,7 @@ iomux_poll_connection(iomux_t *iomux, iomux_connection_t *connection, struct tim
     // NOTE: Both kqueue and select implementation need to actively
     //       register for output events at each call so we need
     //       to notify back that there is pending data.
-    //       In the epoll implementation instead, filedescriptor are
+    //       In the epoll implementation instead, filedescriptors are
     //       registered for output events only once so if there was
     //       already a chunk in the queue, the filedescriptor was
     //       presumably already registered for output events.
@@ -1095,10 +1098,11 @@ iomux_poll_connection(iomux_t *iomux, iomux_connection_t *connection, struct tim
     return 0;
 }
 
-#if defined(HAVE_KQUEUE)
 void
 iomux_run(iomux_t *iomux, struct timeval *tv_default)
 {
+#if defined(HAVE_KQUEUE)
+
     int i;
     struct timespec ts;
     struct timeval expire_min = { 0, 0 };
@@ -1196,13 +1200,9 @@ iomux_run(iomux_t *iomux, struct timeval *tv_default)
     }
     MUTEX_UNLOCK(iomux);
     iomux_run_timeouts(iomux);
-}
 
 #elif defined(HAVE_EPOLL)
 
-void
-iomux_run(iomux_t *iomux, struct timeval *tv_default)
-{
     int fd;
 
     struct timeval expire_min = { 0, 0 };
@@ -1320,13 +1320,9 @@ iomux_run(iomux_t *iomux, struct timeval *tv_default)
     }
     MUTEX_UNLOCK(iomux);
     iomux_run_timeouts(iomux);
-}
 
 #else
 
-void
-iomux_run(iomux_t *iomux, struct timeval *tv_default)
-{
     int fd;
     int fdset_size = iomux->maxconnections > 1024 ? iomux->maxconnections/1024 : 1;
     fd_set rin[fdset_size], rout[fdset_size];
@@ -1443,8 +1439,7 @@ iomux_run(iomux_t *iomux, struct timeval *tv_default)
 
     MUTEX_UNLOCK(iomux);
     iomux_run_timeouts(iomux);
-}
 
 #endif
-
+}
 

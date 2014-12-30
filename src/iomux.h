@@ -91,7 +91,7 @@ typedef void (*iomux_eof_callback_t)(iomux_t *iomux, int fd, void *priv);
 typedef void (*iomux_connection_callback_t)(iomux_t *iomux, int fd, void *priv);
 
 /*
- * @brief Callback called when an output chunk can be safely relised (because flushed)
+ * @brief Callback called when an output chunk can be safely released (because flushed)
  * @param iomux The iomux handle
  * @param fd The fd the timer relates to
  * @param data The output chunk which can now be released
@@ -153,8 +153,8 @@ int iomux_remove(iomux_t *iomux, int fd);
  * @note Needs to be reset after a timeout has fired.
  */
 void iomux_set_timeout(iomux_t *iomux,
-                                     int fd,
-                                     struct timeval *timeout);
+                       int fd,
+                       struct timeval *timeout);
 
 typedef void (*iomux_timeout_free_context_cb)(void *priv);
 
@@ -387,6 +387,7 @@ typedef struct __iomtee_s iomtee_t;
  * @return A multi-tee handler
  */
 iomtee_t *iomtee_open(int *vfd, int num_fds, ...);
+
 /**
  * @brief Get the multi-tee filedescriptor
  *
@@ -399,6 +400,7 @@ iomtee_t *iomtee_open(int *vfd, int num_fds, ...);
  *       iomtee_open()
  */
 int iomtee_fd(iomtee_t *tee);
+
 /**
  * @brief Close the multi-tee and dispose all resources
  * @param tee A valid multi-tee handler
