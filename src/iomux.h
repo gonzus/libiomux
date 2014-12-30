@@ -31,7 +31,7 @@ typedef enum {
 /**
  * @brief Handle input coming from a managed filedescriptor
  * @param iomux The iomux handle
- * @param fd The fd the timer relates to
+ * @param fd The fd where input data is coming from
  * @param data the data read from the filedescriptor
  * @param len the size of the data being provided
  * @param priv the private pointer registered with the callbacks
@@ -46,7 +46,7 @@ typedef int (*iomux_input_callback_t)(iomux_t *iomux, int fd, unsigned char *dat
 /**
  * @brief Callback called to poll for data to be written to a managed filedescriptor
  * @param iomux The iomux handle
- * @param fd The fd the timer relates to
+ * @param fd The fd where output data will be written
  * @param data A reference to the pointer to where the data is stored
  * @param len  A pointer to where to store length of the data
  * @param priv the private pointer registered with the callbacks
@@ -71,7 +71,7 @@ typedef void (*iomux_timeout_callback_t)(iomux_t *iomux, int fd, void *priv);
 /*
  * @brief Callback called when the end-of-file is detected on a filedescriptor
  * @param iomux The iomux handle
- * @param fd The fd the timer relates to
+ * @param fd The fd where EOF was detected
  * @param priv the private pointer registered with the callbacks
  * @note No further activity will be notified on the filedescriptor
  *       after this event
@@ -81,10 +81,10 @@ typedef void (*iomux_eof_callback_t)(iomux_t *iomux, int fd, void *priv);
 /*
  * @brief Callback called on a listening fildescriptor when a new connection arrives
  * @param iomux The iomux handle
- * @param fd The fd the timer relates to
+ * @param fd The fd for the newly accepted connection
  * @param priv the private pointer registered with the callbacks
  *
- * @note Only filedescriptor on which the iomux_listen() has been called
+ * @note Only filedescriptors on which the iomux_listen() has been called
  *       will receive this notification (since the mux will call accept()
  *       only on those filedescriptors, marked as listening sockets)
  */
@@ -93,7 +93,7 @@ typedef void (*iomux_connection_callback_t)(iomux_t *iomux, int fd, void *priv);
 /*
  * @brief Callback called when an output chunk can be safely released (because flushed)
  * @param iomux The iomux handle
- * @param fd The fd the timer relates to
+ * @param fd The fd the output chunk relates to
  * @param data The output chunk which can now be released
  * @param len The size of the chunk
  * @param priv the private pointer registered with the callbacks
@@ -105,7 +105,7 @@ typedef void (*iomux_free_data_callback_t)(iomux_t *iomux, int fd, unsigned char
  * @brief iomux callbacks structure
  */
 typedef struct __iomux_callbacks {
-    //! The callback called when there is new data on the monitored fd
+    //! If not NULL, it will be called when there is new data on the monitored fd
     iomux_input_callback_t mux_input;
     //! If not NULL, it will be called when it's possible to write new data on fd 
     iomux_output_callback_t mux_output;
@@ -113,9 +113,9 @@ typedef struct __iomux_callbacks {
     iomux_timeout_callback_t mux_timeout;
     //! If not NULL, it will be called when EOF is reached and the fd can be closed
     iomux_eof_callback_t mux_eof;
-    //! If not NULL and fd is a listening socket, it will be called when a new connection is accepted on fd 
+    //! If not NULL and the iomux relates to a listening socket, it will be called when a new connection is accepted on fd
     iomux_connection_callback_t mux_connection;
-    //! If not NULL this callback will be used instead of free() when an output chunk should be released
+    //! If not NULL, it will be used instead of free() when an output chunk should be released
     iomux_free_data_callback_t mux_free_data;
     //! A pointer to private data which will be passed to all the callbacks as last argument
     void *priv;
@@ -145,7 +145,7 @@ int  iomux_add(iomux_t *iomux, int fd, iomux_callbacks_t *cbs);
 int iomux_remove(iomux_t *iomux, int fd);
 
 /**
- * @brief Register a timeout on a connection.
+ * @brief Register a timeout (associated to an fd) on a connection.
  * @param iomux The iomux handle
  * @param fd The fd the timer relates to
  * @param timeout The timeout (relative) or NULL
