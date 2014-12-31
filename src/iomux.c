@@ -1031,14 +1031,18 @@ iomux_poll_connection(iomux_t *iomux, iomux_connection_t *connection, struct tim
     }
 
 #if defined(HAVE_TIMERFD)
-#if 0
-    // TODO
     if (len && connection->cbs.mux_timeout) {
-
-                connection->cbs.mux_timeout(iomux, fd, connection->cbs.priv);
-
+      uint64_t exp;
+      // fd created with non-blocking semantics: TFD_NONBLOCK
+      s = read(fd, &exp, sizeof(exp));
+      if (s != sizeof(exp)) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          // no event fired since last check
+        }
+      } else {
+        connection->cbs.mux_timeout(iomux, fd, (unsigned long) exp, connection->cbs.priv);
+      }
     }
-#endif
 #else
     if (connection->expire_time_gonzo.tv_sec) {
         if (timercmp(now, &connection->expire_time_gonzo, <)) {

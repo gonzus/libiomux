@@ -52,7 +52,7 @@ objects:
 		MIN_VERSION=2.6.27; \
 		SMALLER_VERSION=`echo "$$KERNEL_VERSION$$MIN_VERSION" | sort -V | head -1`; \
 		if [ "$$SMALLER_VERSION" != "$$MIN_VERSION" ]; then \
-		    PLATFORM_CFLAGS="-DHAVE_EPOLL"; \
+		    PLATFORM_CFLAGS="-DHAVE_EPOLL -DHAVE_TIMERFD"; \
 		fi; \
 	    fi; \
 	fi; \
