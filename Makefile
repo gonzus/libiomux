@@ -42,7 +42,7 @@ shared: objects
 
 .PHONY: objects
 objects: CFLAGS += -fPIC -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -DTHREAD_SAFE -g -O3
-objects: 
+objects:
 	@if [ "X$$USE_SELECT" = "X" ]; then \
 	    UNAME=`uname`; \
 	    if [ "$$UNAME" = "Darwin" ]; then \
@@ -75,8 +75,8 @@ libut:
 tests: CFLAGS += -Isrc -Isupport/libut/src -Wall -Werror -Wno-parentheses -Wno-pointer-sign -DTHREAD_SAFE -g -O3
 tests: libut static
 	@for i in $(TESTS); do\
-	  echo "$(CC) $(CFLAGS) $$i.c -o $$i libiomux.a $(LDFLAGS) -lm";\
-	  $(CC) $(CFLAGS) $$i.c -o $$i libiomux.a support/libut/libut.a $(LDFLAGS) -lm;\
+	  echo "$(CC) $(CFLAGS) $$i.c -o $$i libiomux.a $(LDFLAGS) -lm -lrt";\
+	  $(CC) $(CFLAGS) $$i.c -o $$i libiomux.a support/libut/libut.a $(LDFLAGS) -lm -lrt;\
 	done;\
 	for i in $(TEST_EXEC_ORDER); do echo; test/$$i; echo; done
 

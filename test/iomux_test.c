@@ -13,6 +13,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/un.h>
+#include <sys/timerfd.h>
 
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -34,7 +35,7 @@
 #define TEST_CLIENT_PORT   6544
 
 int test_input(iomux_t *mux, int fd, unsigned char *data, int len, void *priv);
-void test_timeout(iomux_t *mux, int fd, void *priv);
+void test_timeout(iomux_t *mux, int fd, unsigned long times, void *priv);
 //void test_eof(iomux_t *mux, int fd, void *priv);
 void test_connection(iomux_t *mux, int fd, void *priv);
 
@@ -43,10 +44,10 @@ struct {
     char string[256];
 } test_context;
 
-int client, server;
+int client, server, timer;
 
-iomux_callbacks_t callbacks = {
-    test_input, NULL, test_timeout, NULL, test_connection, (void *)&test_context
+iomux_callbacks_t socket_callbacks = {
+    test_input, NULL, NULL, NULL, test_connection, (void *)&test_context
 };
 
 static int
@@ -186,6 +187,38 @@ open_connection(const char *host, int port, unsigned int timeout)
     return sock;
 }
 
+static int
+create_timer(int ms)
+{
+  struct timespec now;
+  if (clock_gettime(CLOCK_REALTIME, &now) == -1) {
+    fprintf(stderr, "Could not get current clock\n");
+    return -1;
+  }
+
+  int fd = timerfd_create(CLOCK_REALTIME, 0);
+  if (fd == -1) {
+    fprintf(stderr, "Could not create timer\n");
+    return -1;
+  }
+
+  struct itimerspec ts;
+  ts.it_value.tv_sec = now.tv_sec;
+  ts.it_value.tv_nsec = now.tv_nsec + ms * 1000000;
+  if (ts.it_value.tv_nsec >= 1000000000) {
+    ++ts.it_value.tv_sec;
+    ts.it_value.tv_nsec -= 1000000000;
+  }
+  ts.it_interval.tv_sec = 0;
+  ts.it_interval.tv_nsec = 0;
+  if (timerfd_settime(fd, TFD_TIMER_ABSTIME, &ts, NULL) == -1) {
+    fprintf(stderr, "Could not arm timer\n");
+    close(fd);
+    return -1;
+  }
+
+  return fd;
+}
 
 
 
@@ -202,10 +235,11 @@ int test_input(iomux_t *mux, int fd, unsigned char *data, int len, void *priv)
     return len;
 }
 
-void test_timeout(iomux_t *mux, int fd, void *priv)
+void test_timeout(iomux_t *mux, int fd, unsigned long times, void *priv)
 {
     //struct timeval tv = { 1, 0 };
-    ut_testing("iomux_end_loop(mux)");
+    fprintf(stderr, "FUCK!\n");
+    ut_testing("iomux_end_loop(mux), timeout fired %lu times", times);
     iomux_end_loop(mux);
 }
 
@@ -226,7 +260,7 @@ void test_eof(iomux_t *mux, int fd, void *priv)
 void test_connection(iomux_t *mux, int fd, void *priv)
 {
     // add all callbacks to newly accepted socket
-    iomux_add(mux, fd, &callbacks);
+    iomux_add(mux, fd, &socket_callbacks);
 }
 
 static void loop_end(iomux_t *mux, void *priv)
@@ -270,7 +304,7 @@ main(int argc, char **argv)
     iomux_t *mux;
 
     ut_init(basename(argv[0]));
-     
+
     ut_testing("iomux_create(0, 0)");
     mux = iomux_create(0, 0);
     if (mux)
@@ -280,25 +314,38 @@ main(int argc, char **argv)
 
     ut_testing("opening server socket");
     server = open_socket("localhost", TEST_SERVER_PORT);
-    if (!server) 
+    if (server < 0)
         ut_failure("Error : %s\n", strerror(errno));
     else
         ut_success();
 
     ut_testing("iomux_add(mux, server=%d)", server);
-    ut_validate_int(iomux_add(mux, server, &callbacks), 1);
+    ut_validate_int(iomux_add(mux, server, &socket_callbacks), 1);
     if (!iomux_listen(mux, server))
         exit(-1);
 
     ut_testing("opening client connection");
     client = open_connection("localhost", TEST_SERVER_PORT, 5);
-    if (!client) 
+    if (client < 0)
         ut_failure("Error : %s\n", strerror(errno));
     else
         ut_success();
 
     ut_testing("iomux_add(mux, client=%d)", client);
-    ut_validate_int(iomux_add(mux, client, &callbacks), 1);
+    ut_validate_int(iomux_add(mux, client, &socket_callbacks), 1);
+
+    ut_testing("creating timer");
+    timer = create_timer(150); // fire in 150 ms
+    if (timer < 0)
+        ut_failure("Error : %s\n", strerror(errno));
+    else
+        ut_success();
+
+    iomux_callbacks_t tcbs = {
+        .mux_timeout = test_timeout,
+    };
+    ut_testing("iomux_add(mux, timer=%d)", timer);
+    ut_validate_int(iomux_add(mux, timer, &tcbs), 1);
 
     ut_testing("iomux_write(mux, client, %s, %d)", TEST_STRING, strlen(TEST_STRING));
     ut_validate_int(iomux_write(mux, client, TEST_STRING, strlen(TEST_STRING), IOMUX_OUTPUT_MODE_NONE), strlen(TEST_STRING));
@@ -378,7 +425,7 @@ main(int argc, char **argv)
     ut_validate_int(count, 2);
 
     ut_testing("close(client); write(tee_fd, \"CIAO\", 4)");
-    // closing one of the endpoints, the tee still works 
+    // closing one of the endpoints, the tee still works
     // but this time only one receiver will be notified
     close(client);
     rc = write(tee_fd, "CIAO", 4);

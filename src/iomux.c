@@ -659,7 +659,7 @@ iomux_write_fd(iomux_t *iomux, int fd, void *priv)
         MUTEX_LOCK(iomux);
         outlen -= wb;
         if (!outlen) {
-            TAILQ_REMOVE(&iomux->connections[fd]->output_queue, chunk, next); 
+            TAILQ_REMOVE(&iomux->connections[fd]->output_queue, chunk, next);
             if (chunk->free) {
                 if (iomux->connections[fd]->cbs.mux_free_data)
                     iomux->connections[fd]->cbs.mux_free_data(iomux, fd, chunk->data, chunk->len, iomux->connections[fd]->cbs.priv);
@@ -1034,7 +1034,7 @@ iomux_poll_connection(iomux_t *iomux, iomux_connection_t *connection, struct tim
     if (len && connection->cbs.mux_timeout) {
       uint64_t exp;
       // fd created with non-blocking semantics: TFD_NONBLOCK
-      s = read(fd, &exp, sizeof(exp));
+      ssize_t s = read(fd, &exp, sizeof(exp));
       if (s != sizeof(exp)) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           // no event fired since last check
@@ -1061,7 +1061,7 @@ iomux_poll_connection(iomux_t *iomux, iomux_connection_t *connection, struct tim
         }
     }
 #endif
-    
+
     iomux_output_chunk_t *chunk = TAILQ_FIRST(&connection->output_queue);
     if (!chunk && connection->cbs.mux_output) {
         int len = 0;
@@ -1444,4 +1444,3 @@ iomux_run(iomux_t *iomux, struct timeval *tv_default)
 
 #endif
 }
-

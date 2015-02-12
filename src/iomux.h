@@ -38,7 +38,7 @@ typedef enum {
  * @return The number of bytes actually processed by the receiver
  *         If less than 'len' bytes have been processes (because
  *         underrun or similar) the remaining data will be kept
- *         by the iomux and provided back at next call (stopping 
+ *         by the iomux and provided back at next call (stopping
  *         reading from the filedescriptor if necessary)
  */
 typedef int (*iomux_input_callback_t)(iomux_t *iomux, int fd, unsigned char *data, int len, void *priv);
@@ -64,9 +64,10 @@ typedef iomux_output_mode_t (*iomux_output_callback_t)(iomux_t *iomux, int fd, u
  * @brief Callback called when a timeout registered using iomux_set_timeout() expires
  * @param iomux The iomux handle
  * @param fd The fd the timer relates to
+ * @param times The number of times the timeout fired since last time we checked
  * @param priv the private pointer registered with the callbacks
  */
-typedef void (*iomux_timeout_callback_t)(iomux_t *iomux, int fd, void *priv);
+typedef void (*iomux_timeout_callback_t)(iomux_t *iomux, int fd, unsigned long times, void *priv);
 
 /*
  * @brief Callback called when the end-of-file is detected on a filedescriptor
@@ -107,7 +108,7 @@ typedef void (*iomux_free_data_callback_t)(iomux_t *iomux, int fd, unsigned char
 typedef struct __iomux_callbacks {
     //! If not NULL, it will be called when there is new data on the monitored fd
     iomux_input_callback_t mux_input;
-    //! If not NULL, it will be called when it's possible to write new data on fd 
+    //! If not NULL, it will be called when it's possible to write new data on fd
     iomux_output_callback_t mux_output;
     //! If not NULL, it will be called when a timeout on fd expires
     iomux_timeout_callback_t mux_timeout;
@@ -291,7 +292,7 @@ void iomux_end_loop(iomux_t *iomux);
  * @param iomux A valid iomux handler
  * @param timeout Return control to the caller if nothing
  *        happens in the mux within the specified timeout
- * @note The underlying implementation will use: 
+ * @note The underlying implementation will use:
  *       epoll_wait(), kevent() or select()
  *       depending on the flags used at compile time
  */
@@ -396,7 +397,7 @@ iomtee_t *iomtee_open(int *vfd, int num_fds, ...);
  *
  * @param tee A valid multi-tee handler
  * @return the multi-tee filedescriptor to use for write operations
- * @note The same filedescriptor is stored in the 'vfd' parameter in 
+ * @note The same filedescriptor is stored in the 'vfd' parameter in
  *       iomtee_open()
  */
 int iomtee_fd(iomtee_t *tee);
