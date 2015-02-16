@@ -36,7 +36,7 @@ typedef enum {
  * @param len the size of the data being provided
  * @param priv the private pointer registered with the callbacks
  * @return The number of bytes actually processed by the receiver
- *         If less than 'len' bytes have been processes (because
+ *         If less than 'len' bytes have been processed (because
  *         underrun or similar) the remaining data will be kept
  *         by the iomux and provided back at next call (stopping
  *         reading from the filedescriptor if necessary)
@@ -274,7 +274,7 @@ void iomux_hangup_cb(iomux_t *iomux, iomux_cb_t cb, void *priv);
  * @note If there is activity on a monitored filedescriptor or some timer has
  *       fired, the end-of-loop and hangup conditions might be checked before
  *       the whole timeout has passed.
- * @note Before returning the end_loop callback (if anyw) will be called
+ * @note Before returning, the end_loop callback (if any) will be called
  */
 void iomux_loop(iomux_t *iomux, struct timeval *timeout);
 
@@ -349,7 +349,7 @@ void iomux_clear(iomux_t *iomux);
 /**
  * @brief Checks if there is any managed filedescriptor in the iomux instance
  * @param iomux A valid iomux handler
- * @returns TRUE if success; FALSE otherwise
+ * @returns TRUE if empty; FALSE otherwise
  */
 int iomux_isempty(iomux_t *iomux);
 
@@ -374,6 +374,11 @@ int iomux_write_buffer(iomux_t *iomux, int fd);
  */
 iomux_callbacks_t *iomux_callbacks(iomux_t *iomux, int fd);
 
+/**
+ * @brief Return the number of file descriptors in a iomux handler
+ * @param iomux A valid iomux handler
+ * @return The number of file descriptors registered in iomux
+ */
 int iomux_num_fds(iomux_t *iomux);
 
 #ifndef NO_PTHREAD
