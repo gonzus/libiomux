@@ -75,7 +75,7 @@ typedef struct __iomux_connection_s {
     int eof;
     int inlen;
     int outlen;
-    struct timeval expire_time_gonzo;
+    struct timeval expire_time;
     TAILQ_ENTRY(__iomux_connection_s) next;
 #if defined(HAVE_KQUEUE)
     int16_t kfilters[2];
@@ -490,9 +490,9 @@ iomux_set_timeout(iomux_t *iomux, int fd, struct timeval *tv)
     if (tv) {
         struct timeval now;
         gettimeofday(&now, NULL);
-        timeradd(&now, tv, &iomux->connections[fd]->expire_time_gonzo);
+        timeradd(&now, tv, &iomux->connections[fd]->expire_time);
     } else {
-        memset(&iomux->connections[fd]->expire_time_gonzo, 0, sizeof(iomux->connections[fd]->expire_time_gonzo));
+        memset(&iomux->connections[fd]->expire_time, 0, sizeof(iomux->connections[fd]->expire_time));
     }
     MUTEX_UNLOCK(iomux);
 }
@@ -1030,23 +1030,9 @@ iomux_poll_connection(iomux_t *iomux, iomux_connection_t *connection, struct tim
         }
     }
 
-#if defined(HAVE_TIMERFD)
-    if (len && connection->cbs.mux_timeout) {
-      uint64_t exp;
-      // fd created with non-blocking semantics: TFD_NONBLOCK
-      ssize_t s = read(fd, &exp, sizeof(exp));
-      if (s != sizeof(exp)) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-          // no event fired since last check
-        }
-      } else {
-        connection->cbs.mux_timeout(iomux, fd, (unsigned long) exp, connection->cbs.priv);
-      }
-    }
-#else
-    if (connection->expire_time_gonzo.tv_sec) {
-        if (timercmp(now, &connection->expire_time_gonzo, <)) {
-            memset(&connection->expire_time_gonzo, 0, sizeof(connection->expire_time_gonzo));
+    if (connection->expire_time.tv_sec) {
+        if (timercmp(now, &connection->expire_time, <)) {
+            memset(&connection->expire_time, 0, sizeof(connection->expire_time));
             if (connection->cbs.mux_timeout) {
                 connection->cbs.mux_timeout(iomux, fd, connection->cbs.priv);
                 // a timeout routine can remove an fd from the mux, so we need to check for its existance again
@@ -1055,12 +1041,11 @@ iomux_poll_connection(iomux_t *iomux, iomux_connection_t *connection, struct tim
             }
         } else {
             struct timeval expire_time;
-            timersub(&connection->expire_time_gonzo, now, &expire_time);
+            timersub(&connection->expire_time, now, &expire_time);
             if (!expire_min->tv_sec || timercmp(expire_min,  &expire_time, >))
                 memcpy(expire_min, &expire_time, sizeof(struct timeval));
         }
     }
-#endif
 
     iomux_output_chunk_t *chunk = TAILQ_FIRST(&connection->output_queue);
     if (!chunk && connection->cbs.mux_output) {

@@ -64,10 +64,9 @@ typedef iomux_output_mode_t (*iomux_output_callback_t)(iomux_t *iomux, int fd, u
  * @brief Callback called when a timeout registered using iomux_set_timeout() expires
  * @param iomux The iomux handle
  * @param fd The fd the timer relates to
- * @param times The number of times the timeout fired since last time we checked
  * @param priv the private pointer registered with the callbacks
  */
-typedef void (*iomux_timeout_callback_t)(iomux_t *iomux, int fd, unsigned long times, void *priv);
+typedef void (*iomux_timeout_callback_t)(iomux_t *iomux, int fd, void *priv);
 
 /*
  * @brief Callback called when the end-of-file is detected on a filedescriptor
